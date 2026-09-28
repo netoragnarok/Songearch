@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Songearch</title>
+    <style>
+        * { box-sizing:border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+            background: #0f1115;
+            color: #e8e8ea;
+            min-height: 100vh;
+            padding: 48px 20px;
+        }
+
+        main {max-width: 1000px; margin: 0 auto; }
+
+        h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(90deg, #7c5cff, #2ee6a6);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            width: fit-content;
+        }
+
+        .subtitulo {color: #9a9aa5; margin: 8px 0 28px; }
+
+        form {display: flex; gap: 10px; }
+
+        input {
+            flex: 1;
+            padding: 14px 16px;
+            border-radius: 10px;
+            border: 1px solid #2a2d38;
+            background: #171a21;
+            color: inherit;
+            font-size: 1rem;
+        }
+        input:focus { outline: 2px solid #7c5cff; border-color: transparent; }
+
+        button {
+            padding: 14px 24px;
+            border: none;
+            border-radius: 10px;
+            background: #7c5cff;
+            color: white;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        button:hover { background: #6a49f0; }
+        button:disabled { opacity: 0.5; cursor: wait; }
+
+        #status { margin-top: 20px; color: #9a9aa5; min-height: 24px; }
+        #interpretacao { margin-top: 6px; color: #2ee6a6; font-size: 0.95rem; }
+
+        #resultados {
+            margin-top: 28px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 18px;
+        }
+
+        .card {
+            display: block;
+            background: #171a21;
+            border: 1px solid #23262f;
+            border-radius: 12px;
+            padding: 12px;
+            text-decoration: none;
+            color: inherit;
+            transition: transform 0.15s, border-color 0.15s;
+        }
+        .card:hover {
+            transform: translateY(-4px);
+            border-color: #7c5cff;
+        }
+        
+        .capa {
+            width: 100%;
+            aspect-ratio: 1;
+            border-radius: 8px;
+            object-fit: cover;
+            background: #23262f;
+            display: block;
+        }
+
+        .nome {
+            margin-top: 10px;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .artista { color: #9a9aa5; font-size: 0.9rem; margin-top: 2px; }
+    </style>
+</head>
+<body>
+    <main>
+        <h1>Songearch</h1>
+        <p class="subtitulo">Descreva o clima e descubra músicas que combinam</p>
+
+        <form id="form-busca">
+            <input id="descricao" type="text" autocomplete="off" placeholder="Ex: música calma para estudar à noite, com piano">
+            <button id="botao" type="submit">Buscar</button>
+        </form>
+
+        <p id="status"></p>
+        <p id="interpretacao"></p>
+        <section id="resultados"></section>
+    </main>
+
+    <script>
+        const form = document.getElementById('form-busca');
+        const campo = document.getElementById('descricao');
+        const botao = document.getElementById('botao');
+        const statusE1 = document.getElementById('status');
+        const interpretacaoE1 = document.getElementById('interpretacao');
+        const listaE1 = document.getElementById('resultados');
+
+        form.addEventListener('submit', async (evento) => {
+            evento.preventDefault(); // impede a página de recarregar ao enviar
+            
+            const descricao = campo.value.trim();
+            if (!descricao) return;
+
+            botao.disabled = true;
+            statusE1.textContent = "Buscando as músicas ideais... (pode levar alguns segundos)";
+            interpretacaoE1.textContent = "";
+            listaE1.innerHTML = "";
+
+            try {
+                const response = await fetch("/buscar?descricao=" + encodeURIComponent(descricao));
+                if (!response.ok) throw new Error("erro " + response.status);
+
+                const data = await response.json();
+                mostrarInterpretacao(data.interpretacao);
+                mostrarResultados(data.resultados);
+              } catch (erro) {
+                statusE1.textContent = "Algo deu errado (" + erro.message + "). Tente novamente em instantes.";
+              } finally {
+                botao.disabled = false;
+              }
+        });  
+        function mostrarInterpretacao(info) {
+            const partes = [];
+            if (info.mood) partes.push("Clima: " + info.mood);
+            if (info.generos && info.generos.lenght) partes.push("Gêneros: " + info.generos.join(", "));
+            if (info.instrumentos && info.instrumentos.length) partes.push("Instrumentos: " + info.instrumentos.join(", "));
+            interpretacaoE1.textContent = partes.join ("  ·  ");
+        }
+
+        function mostrarResultados(musicas) {
+            if (!musicas.length) {
+                statusE1.textContent = "Nenhuma música encontrada. Tente uma descrição diferente.";
+                return;
+            }
+
+            statusE1.textContent = musicas.length + " Músicas encontradas";
+            for (const musica of musicas) {
+                const card = document.createElement("a");
+                card.className = "card";
+                card.href = musica.spotify_url;
+                card.target = "_blank";
+                card.rel = "noopener";
+                
+                let capa;
+                if (musica.capa) {
+                    capa = document.createElement("img");
+                    capa.src = musica.capa;
+                    capa.alt = "Capa de " + musica.album;
+                    capa.loading = "lazy";
+                } else {
+                    capa = document.createElement("div");
+                }
+                capa.className = "capa";
+
+                const nome = document.createElement("div");
+                nome.className = "nome";
+                nome.textContent = musica.nome;
+
+                const artista = document.createElement("div");
+                artista.className = "artista";
+                artista.textContent = musica.artista;
+
+                card.append(capa, nome, artista);
+                listaE1.appendChild(card);
+            }
+        }
+    </script>
+</body>
+</html>
