@@ -1,7 +1,8 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 from interpretador import interpretar_descricao
 from spotify_client import buscar_musicas, buscar_faixa
-from fastapi.responses import FileResponse
+from youtube_client import buscar_video, CotaYoutubeEsgotada
 
 app = FastAPI()
 
@@ -27,7 +28,10 @@ def home():
 @app.get("/buscar")
 def buscar(descricao: str):
     """Recebe uma descrição livre e devolve faixas reais do Spotify."""
-    termos = interpretar_descricao(descricao)
+    try:
+        termos = interpretar_descricao(descricao)
+    except Exception:
+        raise HTTPException(status_code=503, detail="ia_indisponivel")
 
     resultado = []
     for sugestao in termos.get("sugestoes", []):
@@ -48,3 +52,17 @@ def buscar(descricao: str):
         },
         "resultados": resultado
     }
+
+
+@app.get("/video")
+def video(artista: str, musica: str):
+    """Acha o vídeo do YouTube de uma faixa (chamado só quando o usuário clica em Ouvir)."""
+    try:
+        video_id = buscar_video(artista, musica)
+    except CotaYoutubeEsgotada:
+        raise HTTPException(status_code=503, detail="cota_esgotada")
+
+    if not video_id:
+        raise HTTPException(status_code=404, detail="nao_encontrado")
+
+    return {"video_id": video_id}
